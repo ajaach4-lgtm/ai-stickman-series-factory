@@ -1,0 +1,193 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stickman Storyboard Editor</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#10121b;color:#f5f5f5;font-family:Arial,sans-serif;padding:16px}
+.container{max-width:850px;margin:auto}
+h1{font-size:23px}
+p{color:#aeb4c5;line-height:1.5}
+.card{background:#1b2030;padding:15px;border-radius:12px;margin:14px 0}
+input,textarea,select{width:100%;padding:12px;margin:6px 0 12px;background:#101522;color:white;border:1px solid #41485b;border-radius:8px;font-size:15px}
+textarea{min-height:75px;resize:vertical}
+label{font-size:13px;color:#bdc5d7}
+button{border:0;border-radius:8px;padding:12px 15px;font-weight:bold;margin:4px 2px;cursor:pointer}
+.primary{background:#7555ed;color:white}
+.secondary{background:#30394d;color:white}
+.danger{background:#8e3544;color:white}
+.scene-title{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.scene-title h3{font-size:16px}
+.stats{font-size:14px;color:#b9aaff}
+.actions{display:flex;flex-wrap:wrap;gap:6px}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>🎬 Stickman Storyboard Editor</h1>
+<p>Atur adegan animasi Stickman sebelum diproses menjadi video MP4.</p>
+
+<div class="card">
+<label>Judul video / serial</label>
+<input id="projectTitle" placeholder="Petualangan Stickman">
+
+<label>Episode</label>
+<input id="episode" type="number" min="1" value="1">
+
+<label>Gaya animasi</label>
+<select id="style">
+<option>Stickman 2D</option>
+<option>Stickman 3D</option>
+<option>Campuran 2D dan 3D</option>
+</select>
+
+<label>Format video</label>
+<select id="format">
+<option>Shorts 9:16</option>
+</select>
+
+<div class="stats" id="stats">0 adegan | 0 detik</div>
+</div>
+
+<div id="scenes"></div>
+
+<div class="card">
+<div class="actions">
+<button class="primary" onclick="addScene()">＋ Tambah Adegan</button>
+<button class="secondary" onclick="saveData()">Simpan</button>
+<button class="secondary" onclick="downloadJSON()">Unduh JSON</button>
+<button class="danger" onclick="resetScenes()">Reset</button>
+</div>
+<p id="status">Storyboard tersimpan otomatis di browser HP ini.</p>
+</div>
+</div>
+
+<script>
+const STORAGE_KEY="stickman-storyboard-v1";
+
+let scenes=[
+{duration:7,visual:"Stickman berdiri di sebuah kota.",action:"Melihat sekeliling dengan penasaran.",dialogue:"Di mana aku?",camera:"Wide shot"},
+{duration:7,visual:"Sebuah bayangan muncul dari kejauhan.",action:"Stickman mundur perlahan.",dialogue:"Siapa itu?",camera:"Medium shot"},
+{duration:7,visual:"Sosok misterius mendekat.",action:"Stickman bersiap menghadapi bahaya.",dialogue:"Jangan mendekat!",camera:"Close up"},
+{duration:7,visual:"Sosok misterius menyerang.",action:"Stickman menghindar dengan cepat.",dialogue:"Hati-hati!",camera:"Tracking shot"},
+{duration:7,visual:"Stickman menemukan benda bercahaya.",action:"Mengambil benda tersebut.",dialogue:"Apa ini?",camera:"Close up"},
+{duration:7,visual:"Cahaya besar muncul di belakang Stickman.",action:"Stickman terkejut dan menoleh.",dialogue:"Oh tidak!",camera:"Wide shot"}
+];
+
+function render(){
+const root=document.getElementById("scenes");
+root.innerHTML="";
+scenes.forEach((s,i)=>{
+const card=document.createElement("div");
+card.className="card";
+card.innerHTML=`
+<div class="scene-title">
+<h3>Adegan ${i+1}</h3>
+<button class="danger" data-delete="${i}">Hapus</button>
+</div>
+<label>Durasi (detik)</label>
+<input type="number" min="1" max="60" data-field="duration" data-index="${i}">
+<label>Visual / Tampilan adegan</label>
+<textarea data-field="visual" data-index="${i}"></textarea>
+<label>Gerakan / Aksi Stickman</label>
+<textarea data-field="action" data-index="${i}"></textarea>
+<label>Dialog / Narasi</label>
+<textarea data-field="dialogue" data-index="${i}"></textarea>
+<label>Sudut kamera</label>
+<select data-field="camera" data-index="${i}">
+${["Wide shot","Medium shot","Close up","Tracking shot","Low angle","High angle","Pan shot"].map(v=>`<option>${v}</option>`).join("")}
+</select>`;
+root.appendChild(card);
+card.querySelectorAll("[data-field]").forEach(el=>{
+const field=el.dataset.field;
+el.value=s[field] ?? "";
+el.addEventListener("input",()=>{
+scenes[i][field]=field==="duration"?Math.max(1,Number(el.value)||1):el.value;
+updateStats();
+saveData(false);
+});
+});
+card.querySelector("[data-delete]").addEventListener("click",()=>deleteScene(i));
+});
+updateStats();
+}
+
+function updateStats(){
+const total=scenes.reduce((sum,s)=>sum+(Number(s.duration)||0),0);
+document.getElementById("stats").textContent=
+`${scenes.length} adegan | ${total} detik`;
+}
+
+function addScene(){
+scenes.push({duration:7,visual:"",action:"",dialogue:"",camera:"Wide shot"});
+render();saveData();
+}
+
+function deleteScene(i){
+if(scenes.length<=1){alert("Minimal harus ada satu adegan.");return;}
+scenes.splice(i,1);render();saveData();
+}
+
+function saveData(show=true){
+const data={
+title:document.getElementById("projectTitle").value,
+episode:document.getElementById("episode").value,
+style:document.getElementById("style").value,
+format:document.getElementById("format").value,
+scenes
+};
+localStorage.setItem(STORAGE_KEY,JSON.stringify(data));
+if(show)document.getElementById("status").textContent="✓ Storyboard berhasil disimpan di HP.";
+}
+
+function loadData(){
+try{
+const raw=localStorage.getItem(STORAGE_KEY);
+if(!raw)return;
+const data=JSON.parse(raw);
+document.getElementById("projectTitle").value=data.title||"";
+document.getElementById("episode").value=data.episode||1;
+document.getElementById("style").value=data.style||"Stickman 2D";
+document.getElementById("format").value=data.format||"Shorts 9:16";
+if(Array.isArray(data.scenes)&&data.scenes.length)scenes=data.scenes;
+}catch(e){console.log("Data storyboard tidak dapat dibaca.");}
+}
+
+function downloadJSON(){
+saveData(false);
+const data={
+title:document.getElementById("projectTitle").value,
+episode:Number(document.getElementById("episode").value),
+style:document.getElementById("style").value,
+format:document.getElementById("format").value,
+totalDuration:scenes.reduce((sum,s)=>sum+Number(s.duration||0),0),
+scenes
+};
+const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+const url=URL.createObjectURL(blob);
+const a=document.createElement("a");
+a.href=url;
+a.download="stickman-storyboard.json";
+a.click();
+URL.revokeObjectURL(url);
+document.getElementById("status").textContent="✓ File JSON dibuat.";
+}
+
+function resetScenes(){
+if(!confirm("Reset semua adegan storyboard?"))return;
+localStorage.removeItem(STORAGE_KEY);
+scenes=[{duration:7,visual:"",action:"",dialogue:"",camera:"Wide shot"}];
+render();saveData();
+}
+
+["projectTitle","episode","style","format"].forEach(id=>{
+document.getElementById(id).addEventListener("input",()=>saveData(false));
+});
+loadData();
+render();
+</script>
+</body>
+</html>
