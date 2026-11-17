@@ -3,18 +3,21 @@ FROM node:20-bookworm-slim
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     fonts-liberation \
+    librsvg2-bin \
+    espeak-ng \
+    espeak-ng-data \
     && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
 
-RUN npm install
+RUN npm install --omit=dev
 
 COPY . .
 
-RUN mkdir -p uploads public
+RUN mkdir -p uploads output public
 
 ENV NODE_ENV=production
 
