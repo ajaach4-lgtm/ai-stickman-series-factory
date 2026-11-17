@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Produksi Video — AI Stickman Series Factory</title>
+<style>
+:root{color-scheme:dark;--bg:#0d111b;--card:#1b2334;--muted:#aeb8ca;--accent:#8b7cff;--line:#354158}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:#f7f8fc;font:16px/1.5 system-ui,Arial,sans-serif}.wrap{max-width:850px;margin:auto;padding:22px 15px 48px}h1{font-size:27px;margin:0 0 5px}.sub{color:var(--muted);margin:0 0 22px}.card{background:var(--card);border:1px solid #28334a;border-radius:18px;padding:20px;margin:16px 0}label{display:block;font-weight:650;margin:12px 0 7px}input,select,textarea{width:100%;border:1px solid var(--line);background:#101725;color:#fff;border-radius:11px;padding:13px;font:inherit}textarea{min-height:270px;resize:vertical;font-family:ui-monospace,monospace;font-size:13px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.btn{border:0;border-radius:12px;padding:14px 18px;font-weight:750;font-size:16px;cursor:pointer;background:var(--accent);color:white;width:100%;margin-top:15px}.btn:disabled{opacity:.55;cursor:not-allowed}.secondary{background:#34415b}.status{margin-top:14px;color:var(--muted)}.bar{height:10px;background:#101725;border-radius:20px;overflow:hidden;margin:12px 0}.fill{height:100%;width:0;background:#8b7cff;transition:width .3s}.download{display:none;margin-top:16px;text-align:center;background:#176b45;color:white;padding:14px;border-radius:12px;text-decoration:none;font-weight:750}.hint{font-size:13px;color:var(--muted)}.error{color:#ff9b9b}.ok{color:#85e3b2}@media(max-width:560px){.grid{grid-template-columns:1fr}.card{padding:16px}}
+</style></head>
+<body><main class="wrap">
+<h1>AI Stickman Series Factory</h1><p class="sub">Tempel storyboard dari ChatGPT, buat video, lalu unduh MP4.</p>
+<section class="card">
+<h2>1. Masukkan storyboard</h2>
+<label for="story">Storyboard JSON</label>
+<textarea id="story" spellcheck="false" placeholder='Tempel JSON storyboard dari ChatGPT di sini...'></textarea>
+<p class="hint">Gunakan JSON dengan properti <b>title</b>, <b>episode</b>, <b>characters</b>, dan <b>scenes</b>. Setiap adegan sebaiknya memiliki duration, visual, action, dan dialogue.</p>
+<div class="grid"><div><label for="style">Gaya video</label><select id="style"><option value="2D">Stickman 2D</option><option value="3D">Gaya 3D (render visual dasar saat ini)</option><option value="mix">Campuran (render visual dasar saat ini)</option></select></div><div><label for="episode">Nomor episode (opsional)</label><input id="episode" type="number" min="1" max="999" placeholder="Otomatis dari JSON"></div></div>
+<button class="btn" id="generate">Generate Video MP4</button>
+<div id="status" class="status" aria-live="polite">Menunggu storyboard.</div><div class="bar"><div id="fill" class="fill"></div></div>
+<a id="download" class="download" href="#" download>⬇ Download Video MP4</a>
+</section>
+<section class="card"><h2>2. Catatan produksi</h2><p class="hint">Versi ini merender animasi 2D dasar dari adegan storyboard, menggunakan suara sintetis lokal untuk teks dialog, dan audio latar sederhana. Pilihan 3D belum menghasilkan animasi 3D sungguhan. Biarkan halaman ini terbuka sampai render selesai.</p></section>
+</main>
+<script>
+const $=id=>document.getElementById(id);let timer=null;
+function show(message,kind=''){ $('status').textContent=message;$('status').className='status '+kind; }
+$('generate').addEventListener('click',async()=>{
+ if(timer)clearInterval(timer);$('download').style.display='none';$('fill').style.width='0%';
+ let storyboard;try{const raw=$('story').value.trim();if(!raw)throw new Error('Tempel storyboard JSON terlebih dahulu.');storyboard=JSON.parse(raw.replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,''));if(!storyboard||!Array.isArray(storyboard.scenes)||!storyboard.scenes.length)throw new Error('Storyboard harus memiliki daftar scenes.');}catch(e){show(e.message,'error');return;}
+ const ep=Number($('episode').value);if(ep>0)storyboard.episode=ep;
+ $('generate').disabled=true;show('Mengirim storyboard ke mesin render...');
+ try{const response=await fetch('/api/render',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({storyboard,style:$('style').value})});const data=await response.json();if(!response.ok)throw new Error(data.error||'Gagal memulai render.');show('Render diterima. Menyiapkan video...');
+ timer=setInterval(async()=>{try{const r=await fetch('/api/render/'+encodeURIComponent(data.jobId));const job=await r.json();if(!r.ok)throw new Error(job.error||'Status render tidak tersedia.');$('fill').style.width=(job.progress||0)+'%';show((job.message||job.status)+' — '+(job.progress||0)+'%');if(job.status==='completed'){clearInterval(timer);timer=null;$('download').href=job.downloadUrl;$('download').style.display='block';show('Video selesai dibuat. Silakan unduh MP4.','ok');$('generate').disabled=false;}else if(job.status==='failed'){clearInterval(timer);timer=null;show('Render gagal: '+job.message,'error');$('generate').disabled=false;}}catch(e){clearInterval(timer);timer=null;show('Gagal memeriksa status: '+e.message,'error');$('generate').disabled=false;}},2500);
+ }catch(e){show(e.message,'error');$('generate').disabled=false;}
+});
+</script></body></html>
