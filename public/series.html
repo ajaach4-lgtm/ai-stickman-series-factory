@@ -1,0 +1,361 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Stickman Series Factory</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:16px;background:#10121b;color:white;font-family:Arial}
+main{max-width:800px;margin:auto}
+.card{background:#1c2232;padding:16px;border-radius:13px;margin:14px 0}
+input,select{width:100%;padding:12px;margin:7px 0 14px;background:#101522;color:white;border:1px solid #41485b;border-radius:8px;font-size:15px}
+label{font-size:13px;color:#bdc5d7}
+button{padding:12px 15px;border:0;border-radius:8px;background:#7655ed;color:white;font-weight:bold;margin:4px;cursor:pointer}
+button.secondary{background:#354056}
+button:disabled{opacity:.4}
+.small{font-size:13px;color:#aeb6c9;line-height:1.5}
+.episode{padding:13px;background:#252d40;border-radius:9px;margin:9px 0}
+.episode.selected{border:1px solid #987cff}
+.status{font-size:13px;color:#c3b4ff}
+.progress{height:10px;background:#343b50;border-radius:10px;overflow:hidden}
+.bar{height:100%;width:0;background:#8c70ff}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.actions{display:flex;flex-wrap:wrap;gap:5px}
+</style>
+</head>
+<body>
+<main>
+<h2>🎬 AI Stickman Series Factory</h2>
+<p class="small">Buat cerita serial sekaligus, lalu pilih episode untuk diproduksi menjadi video.</p>
+
+<div class="card">
+<h3>1. Buat Serial Baru</h3>
+
+<label>Judul serial</label>
+<input id="title" placeholder="Contoh: Petualangan Stickman">
+
+<label>Genre cerita</label>
+<select id="genre">
+<option>Petualangan</option>
+<option>Misteri</option>
+<option>Komedi</option>
+<option>Fantasi</option>
+<option>Aksi</option>
+<option>Horor ringan</option>
+<option>Fiksi ilmiah</option>
+</select>
+
+<label>Jumlah episode</label>
+<select id="episodeCount">
+<option value="5">5 Episode</option>
+<option value="10" selected>10 Episode</option>
+<option value="15">15 Episode</option>
+<option value="20">20 Episode</option>
+<option value="30">30 Episode</option>
+</select>
+
+<label>Gaya animasi serial</label>
+<select id="style">
+<option>Stickman 2D</option>
+<option>Stickman 3D</option>
+</select>
+
+<button id="generate">✨ Generate Semua Cerita</button>
+<button id="save" class="secondary">Simpan Pengaturan</button>
+</div>
+
+<div class="card">
+<h3>2. Progres Pembuatan Cerita</h3>
+<div class="progress"><div class="bar" id="bar"></div></div>
+<p id="progressText" class="status">Belum dimulai.</p>
+<p id="message" class="small">Cerita setiap episode akan disimpan otomatis.</p>
+</div>
+
+<div class="card">
+<h3>3. Pengaturan Produksi Harian</h3>
+<label>Maksimal video per hari</label>
+<select id="dailyLimit">
+<option value="1">1 episode per hari</option>
+<option value="2">2 episode per hari</option>
+</select>
+<p class="small">Pengaturan ini menentukan batas rendering video harian. Cerita serial tidak dibatasi oleh kuota ini.</p>
+<div class="row">
+<span class="small">Produksi hari ini</span>
+<strong id="dailyUsage">0 / 1 episode</strong>
+</div>
+<p class="small" id="quotaNote">Penghitungan produksi akan diaktifkan saat mesin rendering MP4 terhubung.</p>
+</div>
+
+<div class="card">
+<h3>4. Pilih Episode</h3>
+<p class="small">Pilih episode yang ingin dibuat videonya. Kamu bisa memilih episode mana saja.</p>
+<div id="episodes">
+<p class="small">Belum ada daftar episode.</p>
+</div>
+</div>
+
+<div class="card">
+<h3>5. Produksi Episode Terpilih</h3>
+<p id="selectedInfo" class="small">Belum ada episode dipilih.</p>
+<button id="openStoryboard">Buka Storyboard Episode</button>
+<p class="small">Tahap ini membuka storyboard episode terpilih. Integrasi rendering MP4 dan penghitungan batas harian akan kita pasang pada tahap backend berikutnya.</p>
+</div>
+</main>
+
+<script>
+const KEY="stickman-series-v1";
+const SETTINGS="stickman-series-settings-v1";
+
+let project={
+title:"",
+genre:"Petualangan",
+style:"Stickman 2D",
+episodeCount:10,
+episodes:[]
+};
+
+let selectedEpisode=0;
+let running=false;
+
+const $=id=>document.getElementById(id);
+
+function today(){
+const d=new Date();
+return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+
+function save(){
+project.title=$("title").value.trim();
+project.genre=$("genre").value;
+project.style=$("style").value;
+project.episodeCount=Number($("episodeCount").value);
+
+localStorage.setItem(KEY,JSON.stringify(project));
+localStorage.setItem(SETTINGS,JSON.stringify({
+dailyLimit:Number($("dailyLimit").value)
+}));
+
+$("message").textContent="Pengaturan dan cerita serial berhasil disimpan.";
+updateQuota();
+}
+
+function load(){
+try{
+const data=JSON.parse(localStorage.getItem(KEY)||"null");
+if(data)project=data;
+
+const settings=JSON.parse(localStorage.getItem(SETTINGS)||"null");
+
+$("title").value=project.title||"";
+$("genre").value=project.genre||"Petualangan";
+$("style").value=project.style||"Stickman 2D";
+$("episodeCount").value=project.episodeCount||10;
+$("dailyLimit").value=settings?.dailyLimit||1;
+}catch(e){
+console.log(e);
+}
+render();
+updateQuota();
+}
+
+function summaryForNext(){
+if(!project.episodes.length)return "Ini adalah episode pertama.";
+
+const previous=project.episodes[project.episodes.length-1];
+const characters={};
+
+project.episodes.forEach(ep=>{
+(ep.story.characters||[]).forEach(c=>{
+characters[c.name]=c.description;
+});
+});
+
+return `
+KONSISTENSI KARAKTER:
+${Object.entries(characters).map(([n,d])=>n+": "+d).join("\n")}
+
+RINGKASAN EPISODE SEBELUMNYA:
+${previous.story.summary||""}
+
+AKHIR CERITA:
+${previous.story.ending||""}
+
+PETUNJUK LANJUTAN:
+${previous.story.nextEpisodeHook||""}
+`;
+}
+
+async function generateEpisode(number){
+const response=await fetch("/api/story",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({
+title:project.title,
+genre:project.genre,
+episodes:project.episodeCount,
+episode:number,
+previousSummary:summaryForNext()
+})
+});
+
+let data;
+try{data=await response.json();}
+catch(e){throw new Error("Respons server tidak valid.");}
+
+if(!response.ok||!data.success){
+throw new Error(data.details||data.error||"Gagal membuat cerita.");
+}
+return data.story;
+}
+
+async function startGeneration(){
+if(running)return;
+
+if(!$("title").value.trim()){
+alert("Masukkan judul serial terlebih dahulu.");
+return;
+}
+
+const count=Number($("episodeCount").value);
+
+if(project.episodes.length>0){
+if(!confirm("Generate serial baru? Daftar serial lama akan diganti."))return;
+}
+
+save();
+
+project.episodes=[];
+selectedEpisode=0;
+render();
+
+running=true;
+$("generate").disabled=true;
+
+try{
+for(let n=1;n<=count;n++){
+$("progressText").textContent=`Membuat cerita episode ${n} dari ${count}...`;
+$("message").textContent="Sedang membuat cerita. Jangan tutup halaman.";
+
+const story=await generateEpisode(n);
+
+project.episodes.push({
+number:n,
+story,
+createdAt:new Date().toISOString(),
+videoStatus:"Belum dibuat"
+});
+
+localStorage.setItem(KEY,JSON.stringify(project));
+$("bar").style.width=(n/count*100)+"%";
+$("progressText").textContent=`${n} dari ${count} cerita berhasil dibuat.`;
+
+render();
+}
+
+$("message").textContent="Semua cerita serial berhasil dibuat!";
+}catch(error){
+$("message").textContent="Proses berhenti: "+error.message;
+$("progressText").textContent=
+`${project.episodes.length} cerita tersimpan. Kamu bisa melanjutkan proses nanti.`;
+}
+finally{
+running=false;
+$("generate").disabled=false;
+}
+}
+
+function selectEpisode(number){
+selectedEpisode=number;
+render();
+}
+
+function render(){
+const root=$("episodes");
+root.innerHTML="";
+
+if(!project.episodes.length){
+root.innerHTML='<p class="small">Belum ada daftar episode.</p>';
+$("selectedInfo").textContent="Belum ada episode dipilih.";
+return;
+}
+
+project.episodes.forEach(ep=>{
+const card=document.createElement("div");
+card.className="episode"+(selectedEpisode===ep.number?" selected":"");
+
+const row=document.createElement("div");
+row.className="row";
+
+const title=document.createElement("strong");
+title.textContent="Episode "+ep.number+" — "+(ep.story.title||"Tanpa judul");
+
+const button=document.createElement("button");
+button.className="secondary";
+button.textContent=selectedEpisode===ep.number?"Dipilih":"Pilih";
+button.onclick=()=>selectEpisode(ep.number);
+
+const desc=document.createElement("p");
+desc.className="small";
+desc.textContent=ep.story.summary||"Cerita tersimpan.";
+
+const status=document.createElement("p");
+status.className="status";
+status.textContent="Status video: "+(ep.videoStatus||"Belum dibuat");
+
+row.append(title,button);
+card.append(row,desc,status);
+root.append(card);
+});
+
+const chosen=project.episodes.find(ep=>ep.number===selectedEpisode);
+$("selectedInfo").textContent=chosen?
+"Episode "+chosen.number+" dipilih: "+(chosen.story.title||project.title):
+"Silakan pilih episode.";
+}
+
+function openStoryboard(){
+const ep=project.episodes.find(e=>e.number===selectedEpisode);
+
+if(!ep){
+alert("Pilih episode terlebih dahulu.");
+return;
+}
+
+const s=ep.story;
+
+const storyboard={
+title:project.title+" - Episode "+ep.number,
+episode:ep.number,
+style:project.style,
+format:"Shorts 9:16",
+characters:s.characters||[],
+summary:s.summary||"",
+scenes:(s.scenes||[]).map(scene=>({
+duration:Number(scene.duration)||7,
+visual:scene.visual||"",
+action:scene.action||"",
+dialogue:scene.dialogue||"",
+camera:scene.camera||"Wide shot"
+}))
+};
+
+localStorage.setItem("stickman-storyboard-v1",JSON.stringify(storyboard));
+window.location.href="/storyboard.html";
+}
+
+function updateQuota(){
+const limit=Number($("dailyLimit").value)||1;
+$("dailyUsage").textContent="0 / "+limit+" episode";
+}
+
+$("save").onclick=save;
+$("generate").onclick=startGeneration;
+$("dailyLimit").onchange=save;
+$("openStoryboard").onclick=openStoryboard;
+
+load();
+</script>
+</body>
+</html>
