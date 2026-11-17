@@ -1,0 +1,284 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stickman Animation Studio</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:16px;background:#10121b;color:white;font-family:Arial}
+main{max-width:650px;margin:auto}
+h2{font-size:22px}
+p{color:#b8bfd0;line-height:1.5}
+.card{background:#1d2232;border-radius:13px;padding:15px;margin:14px 0}
+canvas{display:block;width:100%;max-width:360px;height:auto;margin:auto;background:#171b2b;border-radius:12px}
+button{padding:12px 16px;border:0;border-radius:8px;margin:4px;background:#7656ed;color:white;font-weight:bold}
+button.secondary{background:#354056}
+button:disabled{opacity:.4}
+.info{text-align:center;color:#b9aaff;font-size:14px;margin:12px}
+.actions{display:flex;justify-content:center;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<main>
+<h2>🎬 Stickman Animation Studio</h2>
+<p>Pratinjau animasi Stickman berdasarkan storyboard yang tersimpan.</p>
+
+<div class="card">
+<canvas id="screen" width="360" height="640"></canvas>
+<div class="info" id="sceneInfo">Memuat storyboard...</div>
+<div class="actions">
+<button class="secondary" id="prev">◀ Sebelumnya</button>
+<button id="play">▶ Play</button>
+<button class="secondary" id="pause">Ⅱ Pause</button>
+<button class="secondary" id="next">Berikutnya ▶</button>
+</div>
+<div class="actions">
+<button class="secondary" id="restart">↻ Ulangi dari awal</button>
+</div>
+</div>
+
+<div class="card">
+<strong id="projectName">Storyboard</strong>
+<p id="description">Belum ada adegan.</p>
+<p id="dialogue"></p>
+</div>
+</main>
+
+<script>
+const canvas=document.getElementById("screen");
+const ctx=canvas.getContext("2d");
+
+let project=null;
+let scenes=[];
+let index=0;
+let playing=false;
+let sceneStart=0;
+let elapsed=0;
+let raf=null;
+
+function loadProject(){
+try{
+const raw=localStorage.getItem("stickman-storyboard-v1");
+if(!raw)throw new Error("Storyboard belum ditemukan.");
+
+project=JSON.parse(raw);
+scenes=project.scenes||[];
+
+if(!scenes.length)throw new Error("Storyboard belum memiliki adegan.");
+
+document.getElementById("projectName").textContent=project.title||"Petualangan Stickman";
+document.getElementById("sceneInfo").textContent="Storyboard berhasil dimuat.";
+showScene();
+}catch(e){
+document.getElementById("sceneInfo").textContent=e.message;
+document.getElementById("description").textContent="Simpan storyboard terlebih dahulu.";
+drawScene(0);
+}
+}
+
+function drawBackground(){
+const gradient=ctx.createLinearGradient(0,0,0,640);
+gradient.addColorStop(0,"#202e50");
+gradient.addColorStop(1,"#111522");
+ctx.fillStyle=gradient;
+ctx.fillRect(0,0,360,640);
+
+ctx.fillStyle="#27334a";
+ctx.fillRect(0,480,360,160);
+
+for(let i=0;i<5;i++){
+ctx.fillStyle="#303b55";
+ctx.fillRect(i*85+5,350,55,130);
+ctx.fillStyle="#45516a";
+ctx.fillRect(i*85+15,370,8,12);
+ctx.fillRect(i*85+35,370,8,12);
+}
+ctx.fillStyle="#b8aaff";
+ctx.fillRect(0,478,360,3);
+}
+
+function drawStickman(x,y,t,action){
+const a=(action||"").toLowerCase();
+let moving=a.includes("jalan")||a.includes("berjalan")||a.includes("lari")||a.includes("berlari");
+let jumping=a.includes("lompat")||a.includes("melompat")||a.includes("melompat");
+
+let swing=moving?Math.sin(t*0.012)*24:0;
+let jump=jumping?Math.abs(Math.sin(t*0.004))*65:0;
+let yy=y-jump;
+
+ctx.save();
+ctx.translate(x,yy);
+ctx.strokeStyle="#ffffff";
+ctx.lineWidth=7;
+ctx.lineCap="round";
+ctx.lineJoin="round";
+
+// Bayangan
+ctx.fillStyle="rgba(0,0,0,.25)";
+ctx.beginPath();
+ctx.ellipse(0,90,35,9,0,0,Math.PI*2);
+ctx.fill();
+
+// Kepala
+ctx.beginPath();
+ctx.arc(0,-55,24,0,Math.PI*2);
+ctx.stroke();
+
+// Badan
+ctx.beginPath();
+ctx.moveTo(0,-31);
+ctx.lineTo(0,38);
+ctx.stroke();
+
+// Tangan
+ctx.beginPath();
+ctx.moveTo(0,-17);
+ctx.lineTo(-35,12+swing);
+ctx.moveTo(0,-17);
+ctx.lineTo(35,12-swing);
+ctx.stroke();
+
+// Kaki
+ctx.beginPath();
+ctx.moveTo(0,38);
+ctx.lineTo(-24+swing,85);
+ctx.moveTo(0,38);
+ctx.lineTo(24-swing,85);
+ctx.stroke();
+
+ctx.restore();
+}
+
+function drawScene(time){
+drawBackground();
+
+const scene=scenes[index]||{};
+const action=scene.action||"";
+const x=180+Math.sin(time*0.001)*25;
+
+drawStickman(x,390,time,action);
+
+ctx.fillStyle="#ffffff";
+ctx.font="bold 19px Arial";
+ctx.textAlign="center";
+ctx.fillText("STICKMAN",180,65);
+
+ctx.font="16px Arial";
+ctx.fillStyle="#d6dcf0";
+const visual=scene.visual||"Adegan Stickman";
+wrapText(visual,180,115,300,23);
+
+if(scene.dialogue){
+ctx.fillStyle="rgba(0,0,0,.7)";
+ctx.fillRect(20,520,320,85);
+ctx.fillStyle="#ffffff";
+ctx.font="bold 17px Arial";
+wrapText(scene.dialogue,180,550,290,23);
+}
+
+ctx.fillStyle="#b9aaff";
+ctx.font="14px Arial";
+ctx.fillText("ADEGAN "+(index+1),180,620);
+}
+
+function wrapText(text,x,y,maxWidth,lineHeight){
+const words=String(text).split(" ");
+let line="";
+let lines=[];
+for(const word of words){
+const test=line+word+" ";
+if(ctx.measureText(test).width>maxWidth&&line){
+lines.push(line.trim());
+line=word+" ";
+}else line=test;
+}
+if(line)lines.push(line.trim());
+lines.slice(0,3).forEach((l,i)=>ctx.fillText(l,x,y+i*lineHeight));
+}
+
+function showScene(){
+if(!scenes.length)return;
+const s=scenes[index];
+document.getElementById("sceneInfo").textContent=
+`Adegan ${index+1} dari ${scenes.length} | ${s.duration||7} detik`;
+document.getElementById("description").textContent=
+s.visual||"Tidak ada deskripsi visual.";
+document.getElementById("dialogue").textContent=
+"Dialog: "+(s.dialogue||"-");
+drawScene(performance.now());
+}
+
+function animate(now){
+if(!playing)return;
+
+if(!sceneStart)sceneStart=now;
+elapsed=(now-sceneStart)/1000;
+
+const duration=Number(scenes[index]?.duration)||7;
+
+if(elapsed>=duration){
+if(index<scenes.length-1){
+index++;
+sceneStart=now;
+showScene();
+}else{
+playing=false;
+sceneStart=0;
+document.getElementById("sceneInfo").textContent="Animasi selesai.";
+return;
+}
+}
+
+drawScene(now);
+raf=requestAnimationFrame(animate);
+}
+
+function play(){
+if(!scenes.length)return;
+if(index===scenes.length-1&&elapsed>=Number(scenes[index].duration||7)){
+index=0;
+}
+playing=true;
+sceneStart=performance.now()-(elapsed*1000);
+raf=requestAnimationFrame(animate);
+}
+
+function pause(){
+playing=false;
+if(raf)cancelAnimationFrame(raf);
+const duration=Number(scenes[index]?.duration)||7;
+elapsed=Math.min(elapsed,duration);
+}
+
+function next(){
+pause();
+index=Math.min(index+1,scenes.length-1);
+elapsed=0;sceneStart=0;
+showScene();
+}
+
+function prev(){
+pause();
+index=Math.max(index-1,0);
+elapsed=0;sceneStart=0;
+showScene();
+}
+
+function restart(){
+pause();
+index=0;elapsed=0;sceneStart=0;
+showScene();
+}
+
+document.getElementById("play").onclick=play;
+document.getElementById("pause").onclick=pause;
+document.getElementById("next").onclick=next;
+document.getElementById("prev").onclick=prev;
+document.getElementById("restart").onclick=restart;
+
+loadProject();
+</script>
+</body>
+</html>
