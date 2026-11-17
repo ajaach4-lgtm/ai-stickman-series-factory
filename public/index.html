@@ -1,0 +1,281 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Stickman Series Factory</title>
+
+<style>
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:Arial,sans-serif;
+  background:#101522;
+  color:white;
+}
+header{
+  padding:18px;
+  background:#192235;
+  border-bottom:1px solid #344158;
+}
+header h2{margin:0;font-size:20px}
+header p{color:#aab5c8;font-size:12px}
+main{padding:16px;max-width:800px;margin:auto}
+.panel{
+  background:#1b263a;
+  padding:16px;
+  border-radius:14px;
+  margin-bottom:16px;
+}
+h3{margin-top:0}
+label{
+  display:block;
+  margin:12px 0 6px;
+  color:#c8d3e5;
+  font-size:13px;
+}
+input,select,button{
+  width:100%;
+  padding:12px;
+  border-radius:8px;
+  border:1px solid #46546c;
+  background:#111a2a;
+  color:white;
+  font-size:14px;
+}
+button{
+  background:#6558e8;
+  border:0;
+  font-weight:bold;
+  margin-top:14px;
+  cursor:pointer;
+}
+button:disabled{opacity:.5}
+.preview{
+  background:#f3f3f3;
+  border-radius:12px;
+  overflow:hidden;
+  color:#111;
+}
+.stage{
+  height:300px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  position:relative;
+  background:linear-gradient(#b9dcf6 0%,#e8eff4 75%,#8eaa80 75%);
+}
+.stickman{
+  width:125px;
+  height:180px;
+  animation:bounce 1s ease-in-out infinite alternate;
+}
+@keyframes bounce{
+  from{transform:translateY(0) rotate(-4deg)}
+  to{transform:translateY(-28px) rotate(4deg)}
+}
+.ground{
+  height:35px;
+  background:#7b9c69;
+}
+.preview-info{
+  padding:12px;
+  background:white;
+  color:#222;
+  font-size:13px;
+}
+.status{
+  color:#b9c5da;
+  font-size:13px;
+  white-space:pre-wrap;
+}
+.scene{
+  padding:12px;
+  border-bottom:1px solid #3a465b;
+  font-size:13px;
+}
+.scene strong{color:#a99eff}
+.small{font-size:12px;color:#aab5c8}
+</style>
+</head>
+
+<body>
+
+<header>
+  <h2>🎬 AI Stickman Series Factory</h2>
+  <p>AI Animation & Serial Video Generator</p>
+</header>
+
+<main>
+
+<div class="panel">
+  <h3>🎭 Stickman Animation Studio</h3>
+  <div class="preview">
+    <div class="stage">
+      <svg class="stickman" viewBox="0 0 120 180">
+        <circle cx="60" cy="25" r="19"
+          fill="none" stroke="#111" stroke-width="5"/>
+        <path d="M60 45 L60 105"
+          stroke="#111" stroke-width="6" fill="none"
+          stroke-linecap="round"/>
+        <path d="M60 58 L25 85 M60 58 L95 80"
+          stroke="#111" stroke-width="6"
+          fill="none" stroke-linecap="round"/>
+        <path d="M60 105 L32 150 M60 105 L90 150"
+          stroke="#111" stroke-width="6"
+          fill="none" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="ground"></div>
+    <div class="preview-info">
+      <strong>Stickman Hero</strong>
+      <div>Animated Character Preview</div>
+    </div>
+  </div>
+  <p class="small">
+    Pratinjau animasi awal. Gerakan dan karakter akan
+    dikembangkan pada tahap Animation Engine.
+  </p>
+</div>
+
+<div class="panel">
+  <h3>📖 AI Story Generator</h3>
+
+  <label>Judul Serial</label>
+  <input id="title" value="Petualangan Stickman">
+
+  <label>Genre Cerita</label>
+  <select id="genre">
+    <option>Petualangan</option>
+    <option>Aksi dan Pertarungan</option>
+    <option>Komedi</option>
+    <option>Misteri</option>
+    <option>Horor</option>
+    <option>Fantasi</option>
+  </select>
+
+  <label>Jumlah Episode</label>
+  <input id="episodes" type="number" value="10" min="1" max="100">
+
+  <label>Episode yang Dibuat</label>
+  <input id="episode" type="number" value="1" min="1">
+
+  <label>Ringkasan Episode Sebelumnya (opsional)</label>
+  <input id="previous" placeholder="Kosongkan untuk episode pertama">
+
+  <button id="generate" onclick="generateStory()">
+    ✨ GENERATE CERITA DENGAN AI
+  </button>
+
+  <p class="status" id="status">Siap membuat cerita.</p>
+</div>
+
+<div class="panel" id="result" style="display:none">
+  <h3>🎞️ Hasil Cerita dan Storyboard</h3>
+  <div id="storyResult"></div>
+</div>
+
+</main>
+
+<script>
+async function generateStory(){
+  const button=document.getElementById("generate");
+  const status=document.getElementById("status");
+  const result=document.getElementById("result");
+  const output=document.getElementById("storyResult");
+
+  button.disabled=true;
+  status.textContent="AI sedang membuat cerita...";
+
+  try{
+    const response=await fetch("/api/story",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        title:document.getElementById("title").value,
+        genre:document.getElementById("genre").value,
+        episodes:Number(document.getElementById("episodes").value),
+        episode:Number(document.getElementById("episode").value),
+        previousSummary:document.getElementById("previous").value
+      })
+    });
+
+    const data=await response.json();
+
+    if(!response.ok){
+      throw new Error(data.error+
+        (data.details ? ": "+data.details : ""));
+    }
+
+    const story=data.story;
+
+    result.style.display="block";
+
+    output.innerHTML="";
+
+    const heading=document.createElement("h3");
+    heading.textContent=story.title || "Cerita Stickman";
+    output.appendChild(heading);
+
+    const summary=document.createElement("p");
+    summary.textContent=story.summary || "";
+    output.appendChild(summary);
+
+    const characterTitle=document.createElement("h4");
+    characterTitle.textContent="Karakter";
+    output.appendChild(characterTitle);
+
+    (story.characters || []).forEach(character=>{
+      const item=document.createElement("div");
+      item.className="scene";
+      item.textContent=character.name+": "+character.description;
+      output.appendChild(item);
+    });
+
+    const sceneTitle=document.createElement("h4");
+    sceneTitle.textContent="Storyboard";
+    output.appendChild(sceneTitle);
+
+    (story.scenes || []).forEach(scene=>{
+      const item=document.createElement("div");
+      item.className="scene";
+
+      const title=document.createElement("strong");
+      title.textContent="Adegan "+scene.scene+
+        " ("+scene.duration+" detik)";
+
+      const visual=document.createElement("p");
+      visual.textContent="Visual: "+scene.visual;
+
+      const action=document.createElement("p");
+      action.textContent="Gerakan: "+scene.action;
+
+      const dialogue=document.createElement("p");
+      dialogue.textContent="Dialog: "+scene.dialogue;
+
+      item.append(title,visual,action,dialogue);
+      output.appendChild(item);
+    });
+
+    const ending=document.createElement("p");
+    ending.textContent="Akhir cerita: "+(story.ending || "");
+    output.appendChild(ending);
+
+    const hook=document.createElement("p");
+    hook.textContent="Episode berikutnya: "+
+      (story.nextEpisodeHook || "");
+    output.appendChild(hook);
+
+    status.textContent="Cerita berhasil dibuat!";
+
+  }catch(error){
+    status.textContent="Gagal: "+error.message;
+  }finally{
+    button.disabled=false;
+  }
+}
+</script>
+
+</body>
+</html>
