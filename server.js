@@ -3,10 +3,9 @@ import express from "express";
 import cors from "cors";
 import multer from "multer";
 import fs from "fs";
-import path from "path";
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 
 app.use(cors());
 app.use(express.json({ limit: "20mb" }));
@@ -24,11 +23,13 @@ const upload = multer({
 });
 
 const API_KEY = process.env.GEMINI_API_KEY;
+const MODEL = "gemini-3.8-flash";
 
 app.get("/api/health", (req, res) => {
   res.json({
     success: true,
     app: "AI Stickman Series Factory",
+    model: MODEL,
     geminiConfigured: Boolean(API_KEY)
   });
 });
@@ -50,65 +51,75 @@ app.post("/api/story", async (req, res) => {
     } = req.body;
 
     const prompt = `
-Bertindaklah sebagai penulis serial animasi Stickman.
+Bertindaklah sebagai penulis profesional
+serial animasi Stickman untuk YouTube Shorts.
 
 Judul serial: ${title || "Petualangan Stickman"}
 Genre: ${genre}
 Jumlah episode: ${episodes}
-Episode yang dibuat: ${episode}
+Episode sekarang: ${episode}
 
 Ringkasan episode sebelumnya:
 ${previousSummary || "Belum ada. Ini episode pertama."}
 
-Buat cerita animasi YouTube Shorts berdurasi
-sekitar 45-60 detik.
+BUAT CERITA:
+- Durasi video sekitar 45-60 detik.
+- Buat 6 sampai 8 adegan.
+- Karakter harus konsisten.
+- Cerita harus menarik dan memiliki konflik.
+- Dialog singkat dan mudah dipahami.
+- Akhiri dengan kejutan atau cliffhanger.
+- Siapkan petunjuk untuk episode selanjutnya.
 
-Pastikan karakter, sifat, penampilan dan
-alur cerita konsisten.
-
-Keluarkan hasil dalam format JSON:
+FORMAT JSON:
 {
-  "title": "",
-  "episode": 1,
+  "title": "Judul episode",
+  "episode": ${episode},
   "characters": [
     {
-      "name": "",
-      "description": ""
+      "name": "Nama karakter",
+      "description": "Deskripsi penampilan dan sifat"
     }
   ],
-  "summary": "",
+  "summary": "Ringkasan cerita",
   "scenes": [
     {
       "scene": 1,
       "duration": 8,
-      "visual": "",
-      "action": "",
-      "dialogue": "",
-      "camera": ""
+      "visual": "Deskripsi visual",
+      "action": "Gerakan karakter",
+      "dialogue": "Dialog karakter",
+      "camera": "Sudut kamera"
     }
   ],
-  "ending": "",
-  "nextEpisodeHook": ""
+  "ending": "Akhir cerita",
+  "nextEpisodeHook": "Kelanjutan cerita"
 }
 
-Buat 6 sampai 8 adegan.
-Jangan menggunakan Markdown.
+Keluarkan JSON valid saja.
+Jangan gunakan Markdown.
 `;
 
     const response = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" +
-      encodeURIComponent(API_KEY),
+      "https://generativelanguage.googleapis.com/v1beta/interactions",
       {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          "x-goog-api-key": API_KEY
         },
         body: JSON.stringify({
-          contents: [{
-            parts: [{ text: prompt }]
-          }],
-          generationConfig: {
-            responseMimeType: "application/json"
+          model: MODEL,
+          input: prompt,
+          store: false,
+          response_format: [
+            {
+              type: "text",
+              mime_type: "application/json"
+            }
+          ],
+          generation_config: {
+            thinking_level: "low"
           }
         })
       }
@@ -118,13 +129,22 @@ Jangan menggunakan Markdown.
 
     if (!response.ok) {
       console.error("Gemini error:", data);
+
       return res.status(502).json({
         error: "Gemini gagal membuat cerita",
-        details: data.error?.message || "Unknown error"
+        details:
+          data.error?.message ||
+          data.message ||
+          JSON.stringify(data)
       });
     }
 
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    const text = (data.steps || [])
+      .filter(step => step.type === "model_output")
+      .flatMap(step => step.content || [])
+      .filter(item => item.type === "text")
+      .map(item => item.text)
+      .join("\n");
 
     if (!text) {
       return res.status(502).json({
@@ -132,17 +152,24 @@ Jangan menggunakan Markdown.
       });
     }
 
-    const story = JSON.parse(text);
+    const cleanText = text
+      .replace(/^```json\s*/i, "")
+      .replace(/^```\s*/i, "")
+      .replace(/\s*```$/i, "")
+      .trim();
 
-    res.json({
+    const story = JSON.parse(cleanText);
+
+    return res.json({
       success: true,
+      model: MODEL,
       story
     });
 
   } catch (error) {
-    console.error(error);
+    console.error("Story error:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       error: "Terjadi kesalahan saat membuat cerita",
       details: error.message
     });
@@ -167,4 +194,6 @@ app.listen(PORT, "0.0.0.0", () => {
   console.log(
     "AI Stickman Series Factory berjalan di port " + PORT
   );
+  console.log("Gemini model:", MODEL);
+  console.log("Gemini API tersedia:", Boolean(API_KEY));
 });
